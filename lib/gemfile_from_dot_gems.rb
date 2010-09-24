@@ -25,7 +25,7 @@ class GemfileFromDotGems
       options     = { :pos => @ss.pos }
       name        = @ss.scan(/\S+/) or raise_parse_error("Don't know what to do with:")
       @gems[name] = options
-      until @ss.skip(/\n/)
+      until @ss.skip(/[\t ]*\n/)
         @ss.skip(/[\t ]+/)
         if @ss.scan(/-\w|--\w\w+/) and key = @ss[0]
           @ss.skip(/[\t ]*(=[\t ]*)?/)
