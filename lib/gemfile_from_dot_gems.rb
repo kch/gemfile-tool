@@ -58,7 +58,7 @@ class GemfileFromDotGems
   def gemfile
     StringIO.new.tap do |io|
       io.puts "source :rubygems"
-      @gems.values.map { |options| options[:source] }.compact.each { |source| io.puts "source #{source.inspect}" }
+      @gems.values.map { |options| options[:source] }.compact.uniq.each { |source| io.puts "source #{source.inspect}" }
       io.puts
       @gems.each { |name, options| io.puts "gem #{[name, options[:version]].compact.map(&:inspect).join(', ')}" }
     end.string
