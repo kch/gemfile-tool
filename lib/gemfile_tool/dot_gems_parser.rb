@@ -1,18 +1,18 @@
 #!/usr/bin/env ruby
 # encoding: UTF-8
 require 'strscan'
-require 'stringio'
 
-class GemfileFromDotGems
+class DotGemsParser
   class ParseError < RuntimeError; end
   attr_reader :gems
 
   def self.[](*a)
-    new(*a).parse.gemfile
+    new(*a).parse.gems
   end
 
-  def initialize(s, filename="-")
-    @s, @filename = s.gsub(/\r\n?/, "\n").sub(/\Z\n?/, "\n"), filename
+  def initialize(io, filename="-")
+    io ||= open(filename)
+    @s, @filename = io.read.gsub(/\r\n?/, "\n").sub(/\Z\n?/, "\n"), filename
   end
 
   def parse
@@ -53,14 +53,5 @@ class GemfileFromDotGems
     col  = @s[0...pos].sub(/.*\n/m, '').length + 1
     peek = @s[peek_pos..-1][/\A.*/]
     raise ParseError, "#{message} #{peek.inspect} in #{@filename} line #{line}, col #{col}"
-  end
-
-  def gemfile
-    StringIO.new.tap do |io|
-      io.puts "source :rubygems"
-      @gems.values.map { |options| options[:source] }.compact.uniq.each { |source| io.puts "source #{source.inspect}" }
-      io.puts
-      @gems.each { |name, options| io.puts "gem #{[name, options[:version]].compact.map(&:inspect).join(', ')}" }
-    end.string
   end
 end

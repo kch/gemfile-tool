@@ -1,6 +1,8 @@
 #!/usr/bin/env ruby
 # encoding: UTF-8
-require File.join(File.expand_path(File.dirname(__FILE__)), "../lib/gemfile_from_dot_gems")
+require 'pathname'
+require Pathname.new(__FILE__).realpath.dirname.parent.join("lib/gemfile_tool/dot_gems_parser").to_s
+require Pathname.new(__FILE__).realpath.dirname.parent.join("lib/gemfile_tool/gemfile_writer").to_s
 
 unless (ARGV & %w[ -h --help -? --usage ]).empty?
   puts DATA.read.gsub(/\$0/, File.basename($0))
@@ -8,8 +10,8 @@ unless (ARGV & %w[ -h --help -? --usage ]).empty?
 end
 
 begin
-  puts GemfileFromDotGems[ARGF.read, ARGF.filename]
-rescue GemfileFromDotGems::ParseError => e
+  puts GemfileWriter.new(DotGemsParser[ARGF, ARGF.filename])
+rescue DotGemsParser::ParseError => e
   $stderr.puts e
   exit 1
 end
