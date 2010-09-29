@@ -1,18 +1,19 @@
 #!/usr/bin/env ruby
 # encoding: UTF-8
+require 'pathname'
 require 'strscan'
-require 'stringio'
 
-class GemfileFromDotGems
+class DotGemsParser
   class ParseError < RuntimeError; end
   attr_reader :gems
 
   def self.[](*a)
-    new(*a).parse.gemfile
+    new(*a).parse.gems
   end
 
-  def initialize(s, filename="-")
-    @s, @filename = s.gsub(/\r\n?/, "\n").sub(/\Z\n?/, "\n"), filename
+  def initialize(io, filename="-")
+    io ||= open(filename)
+    @s, @filename = io.read.gsub(/\r\n?/, "\n").sub(/\Z\n?/, "\n"), filename
   end
 
   def parse
@@ -54,14 +55,36 @@ class GemfileFromDotGems
     peek = @s[peek_pos..-1][/\A.*/]
     raise ParseError, "#{message} #{peek.inspect} in #{@filename} line #{line}, col #{col}"
   end
+end
 
-  def gemfile
-    StringIO.new.tap do |io|
-      io.puts "source :rubygems"
-      @gems.values.map { |options| options[:source] }.compact.each { |source| io.puts "source #{source.inspect}" }
-      io.puts
-      @gems.each { |name, options| io.puts "gem #{[name, options[:version]].compact.map(&:inspect).join(', ')}" }
-    end.string
+require 'stringio'
+
+class GemfileWriter
+  def initialize(gems_hash)
+    @io           = StringIO.new
+    gems_by_group = gems_hash.inject({}) { |h, (k, v)| (h[v[:group]]||={})[k] = v; h }
+    sources       = gems_hash.values.map { |options| options[:source] }.compact.uniq
+    sources      -= %w[ gems.rubyforge.org gemcutter.org rubygems.org ]
+    @io.puts "source :rubygems"
+    sources.each { |source| @io.puts "source #{source.inspect}" }
+    gems_by_group.entries.sort_by { |k, v| k.to_s }.each do |group, gems|
+      @io.puts
+      @io.puts "group #{group.inspect} do" if group
+      gems.each do |name, options|
+        @io.print "  " if group
+        @io.puts  "gem #{[name, options[:version]].compact.map(&:inspect).join(', ')}"
+      end
+      @io.puts "end" if group
+    end
+  end
+
+  def string
+    @io.string
+  end
+  alias_method :to_s, :string
+
+  def write(path = "Gemfile")
+    open(path, "w") { |io| io.write string }
   end
 end
 
@@ -72,8 +95,8 @@ unless (ARGV & %w[ -h --help -? --usage ]).empty?
 end
 
 begin
-  puts GemfileFromDotGems[ARGF.read, ARGF.filename]
-rescue GemfileFromDotGems::ParseError => e
+  puts GemfileWriter.new(DotGemsParser[ARGF, ARGF.filename])
+rescue DotGemsParser::ParseError => e
   $stderr.puts e
   exit 1
 end
