@@ -1,0 +1,94 @@
+#!/usr/bin/env ruby
+# encoding: UTF-8
+
+if %w[ -h --help -? --usage ].include?(ARGV[0]) || (ARGV[0].nil? && !File.exist?("config/environment.rb"))
+  puts DATA.read.gsub(/\$0/, File.basename($0))
+  exit 0
+end
+
+require 'pathname'
+BASEPATH = Pathname.new(__FILE__).realpath.dirname.parent
+require BASEPATH.join("lib/gemfile_tool/dot_gems_parser").to_s
+require BASEPATH.join("lib/gemfile_tool/gemfile_writer").to_s
+require BASEPATH.join("lib/gemfile_tool/ruby_file_wrapper").to_s
+
+# base paths
+m_path     = BASEPATH.join("assets/rails23")            # the path to things we'll stuff into the rails app
+a_path     = Pathname.new(ARGV[0] || Dir.pwd).realpath  # the path to the rails application
+Dir.chdir(a_path)
+
+# git checks
+have_git   = (`git log -n0 >/dev/null 2>&1`; $?.success?)
+clean_repo = have_git && `git status --porcelain --untracked-files=no --ignore-submodules=all 2>&1`.chomp.empty? && $?.success?
+clean_repo or $stderr.puts "You had unstaged/uncommitted changes, I'm proceeding, but I'll not stage my changes."
+
+# RubyFileWrappers for everywthing we'll tinker with
+m_preinit  = RubyFileWrapper.new(m_path.join("preinitializer.rb"))
+m_boot     = RubyFileWrapper.new(m_path.join("boot.rb"))
+a_preinit  = RubyFileWrapper.new(a_path.join("config/preinitializer.rb"))
+a_boot     = RubyFileWrapper.new(a_path.join("config/boot.rb"))
+a_env      = RubyFileWrapper.new(a_path.join("config/environment.rb"))
+a_envs     = Dir[a_path.join("config/environments/*.rb").to_s].map { |path| RubyFileWrapper.new(path) }
+
+# scan for gems everywhere; calls to extract_gems! will also excise the config.gem on spot from the files on disk
+dot_gems_path       = (_ = a_path.join(".gems")).exist? && _
+env_rails_version   = a_env.active_lines.find { |line| line =~ /\A\s*RAILS_GEM_VERSION\s*=\s*("|')([!~<>=]*\s*[\d.]+)\1/ } && $2
+gems_rails          = a_env.extract_gems!(nil)
+gems_rails["rails"] = env_rails_version ? { :version => env_rails_version } : {}
+gems_environments   = a_envs.map(&:extract_gems!)
+gems_dotgems        = DotGemsParser[nil, dot_gems_path] if dot_gems_path
+
+all_gems = \
+  [ gems_environments,
+    gems_rails,
+    gems_dotgems,
+  ].flatten.compact.inject({}) { |h0, h1| h0.merge!(h1) }
+
+# write out the Gemfile, ditch the .gems
+GemfileWriter.new(all_gems).write(a_path.join("Gemfile"))
+dot_gems_path.delete if dot_gems_path
+
+# add the bundler preinitializer file
+unless a_preinit.include?(m_preinit)
+  a_preinit.lines.push("\n").concat(m_preinit.lines)
+  a_preinit.rewrite
+end
+
+# append the bundler stuff to boot file
+unless a_boot.include?(m_boot)
+  lines = a_boot.lines
+  ix    = lines.length - 1
+  ix -= 1 until ix < 0 || lines[ix] =~ /\A\s*Rails\.boot!/
+  ix -= 1 if    ix > 0
+  ix -= 1 while ix < 0 || lines[ix] =~ /\A\s*#/
+  ix >= 0 or ($stderr.puts "Can't find insertion location in #{m_boot.path}"; exit 2)
+  a_boot.lines.insert(ix, "\n", *m_boot.lines)
+  a_boot.rewrite
+end
+
+# stage our changes in git
+if have_git && clean_repo
+  system "git rm -q --ignore-unmatch .gems"
+  system "git add Gemfile"
+  system "git", "add", *[a_preinit, a_boot, a_env].concat(a_envs).map(&:path)
+end
+
+__END__
+Update a Rails 2.3 application to use Bundler:
+
+* Generates a Gemfile from your config.gem lines and heroku .gems file (if present)
+* Adds the necessary code in config/boot.rb and the config/preinitializer.rb file
+* Excises the config.gem lines from your environment files and the .gems file
+* If run on a git repository with a clean stage, stage all the changes made
+
+Usage:
+  $0 [PATH]
+
+PATH is the path to your rails application. If not provided, the working directory is assumed.
+
+
+See also:
+  http://gembundler.com/
+  http://gembundler.com/rails23.html
+  http://docs.heroku.com/gems
+  http://docs.heroku.com/bundler
