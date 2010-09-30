@@ -30,7 +30,7 @@ a_boot     = RubyFileWrapper.new(a_path.join("config/boot.rb"))
 a_env      = RubyFileWrapper.new(a_path.join("config/environment.rb"))
 a_envs     = Dir[a_path.join("config/environments/*.rb").to_s].map { |path| RubyFileWrapper.new(path) }
 
-# scan for gems everywhere; calls to extract_gems! will also excise the config.gem on spot from the files on disk
+# scan for gems everywhere; calls to extract_gems! will also excise the config.gem from the files on disk on spot
 dot_gems_path       = (_ = a_path.join(".gems")).exist? && _
 env_rails_version   = a_env.active_lines.find { |line| line =~ /\A\s*RAILS_GEM_VERSION\s*=\s*("|')([!~<>=]*\s*[\d.]+)\1/ } && $2
 gems_rails          = a_env.extract_gems!(nil)
