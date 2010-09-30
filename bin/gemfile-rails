@@ -86,7 +86,6 @@ Usage:
 
 PATH is the path to your rails application. If not provided, the working directory is assumed.
 
-
 See also:
   http://gembundler.com/
   http://gembundler.com/rails23.html
