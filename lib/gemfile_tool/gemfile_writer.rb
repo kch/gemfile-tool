@@ -7,7 +7,7 @@ class GemfileWriter
     @io           = StringIO.new
     gems_by_group = gems_hash.inject({}) { |h, (k, v)| (h[v[:group]]||={})[k] = v; h }
     sources       = gems_hash.values.map { |options| options[:source] }.compact.uniq
-    sources      -= %w[ gems.rubyforge.org gemcutter.org rubygems.org ]
+    sources      -= %w[ http://gems.rubyforge.org http://gemcutter.org http://rubygems.org ]
     @io.puts "source :rubygems"
     sources.each { |source| @io.puts "source #{source.inspect}" }
     gems_by_group.entries.sort_by { |k, v| k.to_s }.each do |group, gems|
